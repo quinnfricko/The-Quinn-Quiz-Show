@@ -49,11 +49,62 @@ function createPlayer(socketId, name) {
   };
 }
 
+function createDefaultSettings() {
+  return {
+    rounds: 4,
+    questionsPerPlayerPerRound: 2,
+  };
+}
+
+function createSetupState() {
+  return {
+    currentRound: 1,
+    questionsByRound: {},
+  };
+}
+
+function getRoundStore(room, roundNumber) {
+  const roundKey = String(roundNumber);
+
+  if (!room.setup.questionsByRound[roundKey]) {
+    room.setup.questionsByRound[roundKey] = {};
+  }
+
+  return room.setup.questionsByRound[roundKey];
+}
+
+function getRoundProgress(room) {
+  const currentRound = room.setup?.currentRound || 1;
+  const roundStore = getRoundStore(room, currentRound);
+  const requiredCount = room.settings.questionsPerPlayerPerRound;
+  const playerProgress = room.players.map((player) => ({
+    playerId: player.id,
+    playerName: player.name,
+    submittedCount: Array.isArray(roundStore[player.id])
+      ? roundStore[player.id].length
+      : 0,
+    requiredCount,
+    isComplete: Array.isArray(roundStore[player.id])
+      ? roundStore[player.id].length >= requiredCount
+      : false,
+  }));
+
+  return {
+    currentRound,
+    totalRounds: room.settings.rounds,
+    questionsPerPlayerPerRound: requiredCount,
+    playerProgress,
+  };
+}
+
 function serializeRoom(room) {
   return {
     gameId: room.gameId,
     host: room.host,
     players: room.players,
+    settings: room.settings,
+    phase: room.phase,
+    roundState: getRoundProgress(room),
   };
 }
 
@@ -62,6 +113,14 @@ function emitHostAssignment(room, socketId) {
     gameId: room.gameId,
     host: room.host,
     isHost: room.host.id === socketId,
+  });
+}
+
+function emitRoundProgress(room) {
+  io.to(room.gameId).emit("roundProgress", {
+    gameId: room.gameId,
+    phase: room.phase,
+    ...getRoundProgress(room),
   });
 }
 
@@ -74,6 +133,10 @@ function broadcastLobby(room) {
     .forEach((player) => {
       emitHostAssignment(room, player.id);
     });
+
+  if (room.phase === "SETUP" || room.phase === "SETUP_COMPLETE") {
+    emitRoundProgress(room);
+  }
 }
 
 function leaveCurrentGame(socket) {
@@ -100,6 +163,38 @@ function leaveCurrentGame(socket) {
   broadcastLobby(room);
 }
 
+function sanitizeQuestion(payload) {
+  const questionText = String(payload?.questionText || "").trim();
+  const choices = Array.isArray(payload?.choices)
+    ? payload.choices.map((choice) => String(choice || "").trim())
+    : [];
+  const correctAnswerIndex = Number(payload?.correctAnswerIndex);
+
+  if (!questionText) {
+    return { error: "Question text is required." };
+  }
+
+  if (choices.length !== 4 || choices.some((choice) => !choice)) {
+    return { error: "Exactly 4 non-empty answer choices are required." };
+  }
+
+  if (
+    !Number.isInteger(correctAnswerIndex) ||
+    correctAnswerIndex < 0 ||
+    correctAnswerIndex > 3
+  ) {
+    return { error: "Select one correct answer." };
+  }
+
+  return {
+    question: {
+      questionText,
+      choices,
+      correctAnswerIndex,
+    },
+  };
+}
+
 io.on("connection", (socket) => {
   socket.on("createGame", ({ playerName }) => {
     const trimmedName = String(playerName || "").trim();
@@ -117,6 +212,9 @@ io.on("connection", (socket) => {
       gameId,
       host,
       players: [host],
+      settings: createDefaultSettings(),
+      phase: "LOBBY",
+      setup: createSetupState(),
     };
 
     gameRooms.set(gameId, room);
@@ -142,6 +240,11 @@ io.on("connection", (socket) => {
       return;
     }
 
+    if (room.phase !== "LOBBY") {
+      socket.emit("gameError", "This game has already moved past the lobby.");
+      return;
+    }
+
     if (socket.data.gameId && socket.data.gameId !== normalizedGameId) {
       leaveCurrentGame(socket);
     }
@@ -157,6 +260,139 @@ io.on("connection", (socket) => {
     socket.join(normalizedGameId);
     socket.data.gameId = normalizedGameId;
 
+    broadcastLobby(room);
+  });
+
+  socket.on("setGameSettings", ({ gameId, rounds, questionsPerPlayerPerRound, phase }) => {
+    const normalizedGameId = String(gameId || "").trim().toUpperCase();
+    const room = gameRooms.get(normalizedGameId);
+
+    if (!room) {
+      socket.emit("gameError", "Game room not found.");
+      return;
+    }
+
+    if (room.host.id !== socket.id) {
+      socket.emit("gameError", "Only the host can change game settings.");
+      return;
+    }
+
+    if (room.phase === "SETUP_COMPLETE") {
+      socket.emit("gameError", "Setup is already complete for this game.");
+      return;
+    }
+
+    const parsedRounds = Number(rounds);
+    const parsedQuestionsPerRound = Number(questionsPerPlayerPerRound);
+
+    if (
+      !Number.isInteger(parsedRounds) ||
+      !Number.isInteger(parsedQuestionsPerRound) ||
+      parsedRounds < 1 ||
+      parsedQuestionsPerRound < 1
+    ) {
+      socket.emit(
+        "gameError",
+        "Rounds and questions per player per round must both be whole numbers greater than 0."
+      );
+      return;
+    }
+
+    room.settings = {
+      rounds: parsedRounds,
+      questionsPerPlayerPerRound: parsedQuestionsPerRound,
+    };
+
+    if (phase === "SETUP" && room.phase === "LOBBY") {
+      room.phase = "SETUP";
+      room.setup = createSetupState();
+    }
+
+    io.to(room.gameId).emit("gameSettingsUpdated", {
+      gameId: room.gameId,
+      settings: room.settings,
+      phase: room.phase,
+    });
+
+    broadcastLobby(room);
+  });
+
+  socket.on("submitQuestion", (payload) => {
+    const normalizedGameId = String(payload?.gameId || "").trim().toUpperCase();
+    const room = gameRooms.get(normalizedGameId);
+
+    if (!room) {
+      socket.emit("gameError", "Game room not found.");
+      return;
+    }
+
+    if (room.phase !== "SETUP") {
+      socket.emit("gameError", "Question submission is only available during setup.");
+      return;
+    }
+
+    const currentPlayer = room.players.find((player) => player.id === socket.id);
+
+    if (!currentPlayer) {
+      socket.emit("gameError", "You are not part of this game.");
+      return;
+    }
+
+    const validation = sanitizeQuestion(payload);
+
+    if (validation.error) {
+      socket.emit("gameError", validation.error);
+      return;
+    }
+
+    const roundStore = getRoundStore(room, room.setup.currentRound);
+
+    if (!roundStore[socket.id]) {
+      roundStore[socket.id] = [];
+    }
+
+    if (roundStore[socket.id].length >= room.settings.questionsPerPlayerPerRound) {
+      socket.emit("gameError", "You already submitted all questions for this round.");
+      return;
+    }
+
+    roundStore[socket.id].push({
+      playerId: socket.id,
+      playerName: currentPlayer.name,
+      roundNumber: room.setup.currentRound,
+      ...validation.question,
+    });
+
+    const progress = getRoundProgress(room);
+    const everyoneFinished = progress.playerProgress.every(
+      (player) => player.submittedCount >= progress.questionsPerPlayerPerRound
+    );
+
+    emitRoundProgress(room);
+
+    if (!everyoneFinished) {
+      return;
+    }
+
+    io.to(room.gameId).emit("roundComplete", {
+      gameId: room.gameId,
+      completedRound: room.setup.currentRound,
+      totalRounds: room.settings.rounds,
+    });
+
+    if (room.setup.currentRound >= room.settings.rounds) {
+      room.phase = "SETUP_COMPLETE";
+      io.to(room.gameId).emit("setupComplete", {
+        gameId: room.gameId,
+        totalRounds: room.settings.rounds,
+        questionsPerPlayerPerRound: room.settings.questionsPerPlayerPerRound,
+      });
+      broadcastLobby(room);
+      return;
+    }
+
+    room.setup.currentRound += 1;
+    emitRoundProgress(room);
     broadcastLobby(room);
   });
 
