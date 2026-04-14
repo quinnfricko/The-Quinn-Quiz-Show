@@ -1,0 +1,241 @@
+:root {
+  font-family: "Trebuchet MS", "Avenir Next", sans-serif;
+  color: #fff7ea;
+  background:
+    radial-gradient(circle at top, rgba(255, 213, 128, 0.18), transparent 30%),
+    radial-gradient(circle at 85% 20%, rgba(121, 205, 255, 0.18), transparent 22%),
+    linear-gradient(135deg, #091a2c 0%, #16324f 45%, #8c2f39 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.page-shell {
+  width: min(1120px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2.5rem 0 4rem;
+}
+
+.hero-card,
+.panel {
+  background: rgba(7, 14, 24, 0.72);
+  border: 1px solid rgba(255, 247, 234, 0.12);
+  border-radius: 24px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(16px);
+}
+
+.hero-card {
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+}
+
+.lobby-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.7fr);
+  gap: 1rem;
+  align-items: center;
+}
+
+.eyebrow {
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.8rem;
+  color: #ffd580;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  font-size: clamp(2.6rem, 6vw, 4.5rem);
+  margin-bottom: 0.75rem;
+}
+
+h2 {
+  margin-bottom: 0.5rem;
+}
+
+.hero-copy {
+  max-width: 60ch;
+  line-height: 1.6;
+  color: #fbe9c6;
+}
+
+.status-pill,
+.status-block,
+.game-code-card,
+.waiting-card {
+  border: 1px solid rgba(255, 247, 234, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.status-pill {
+  display: inline-flex;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  color: #fff1cf;
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.lobby-grid {
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.9fr);
+}
+
+.panel {
+  padding: 1.5rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+  color: #fbe9c6;
+}
+
+input {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(255, 247, 234, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff7ea;
+  margin-bottom: 0.85rem;
+}
+
+input::placeholder {
+  color: rgba(255, 247, 234, 0.45);
+}
+
+button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.85rem 1.2rem;
+  cursor: pointer;
+  font-weight: 700;
+  color: #102542;
+  background: linear-gradient(135deg, #ffd580 0%, #ffb703 100%);
+}
+
+.panel-heading,
+.game-code-card,
+.player-list li,
+.status-block {
+  display: flex;
+  align-items: center;
+}
+
+.panel-heading {
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.player-count {
+  color: #ffd580;
+}
+
+.game-code-card {
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  min-height: 150px;
+  border-radius: 20px;
+  padding: 1.25rem;
+}
+
+.game-code-card span {
+  font-size: 0.9rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #fbe9c6;
+}
+
+.game-code-card strong {
+  font-size: clamp(2rem, 5vw, 3rem);
+  letter-spacing: 0.18em;
+  margin-top: 0.5rem;
+}
+
+.player-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.player-list li {
+  justify-content: space-between;
+  padding: 0.95rem 1rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.player-list li div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.player-list small {
+  color: #ffd580;
+}
+
+.host-panel {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.waiting-card,
+.status-block {
+  border-radius: 18px;
+  padding: 1rem;
+}
+
+.waiting-title {
+  font-weight: 700;
+  color: #ffd580;
+  margin-bottom: 0.35rem;
+}
+
+.status-block {
+  min-height: 76px;
+  color: #fbe9c6;
+}
+
+@media (max-width: 780px) {
+  .page-shell {
+    width: min(100% - 1rem, 1120px);
+    padding-top: 1rem;
+  }
+
+  .lobby-hero,
+  .lobby-grid {
+    grid-template-columns: 1fr;
+  }
+}
