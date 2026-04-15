@@ -143,6 +143,7 @@ function App() {
     socket.on("assignHost", onAssignHost);
     socket.on("gameSettingsUpdated", onGameSettingsUpdated);
     socket.on("roundProgress", onRoundProgress);
+    socket.on("roundProgressUpdate", onRoundProgress);
     socket.on("roundComplete", onRoundComplete);
     socket.on("setupComplete", onSetupComplete);
     socket.on("gameError", onGameError);
@@ -154,6 +155,7 @@ function App() {
       socket.off("assignHost", onAssignHost);
       socket.off("gameSettingsUpdated", onGameSettingsUpdated);
       socket.off("roundProgress", onRoundProgress);
+      socket.off("roundProgressUpdate", onRoundProgress);
       socket.off("roundComplete", onRoundComplete);
       socket.off("setupComplete", onSetupComplete);
       socket.off("gameError", onGameError);

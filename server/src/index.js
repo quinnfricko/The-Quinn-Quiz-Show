@@ -117,11 +117,14 @@ function emitHostAssignment(room, socketId) {
 }
 
 function emitRoundProgress(room) {
-  io.to(room.gameId).emit("roundProgress", {
+  const payload = {
     gameId: room.gameId,
     phase: room.phase,
     ...getRoundProgress(room),
-  });
+  };
+
+  io.to(room.gameId).emit("roundProgress", payload);
+  io.to(room.gameId).emit("roundProgressUpdate", payload);
 }
 
 function broadcastLobby(room) {
@@ -164,33 +167,31 @@ function leaveCurrentGame(socket) {
 }
 
 function sanitizeQuestion(payload) {
-  const questionText = String(payload?.questionText || "").trim();
+  const question = String(payload?.question || payload?.questionText || "").trim();
   const choices = Array.isArray(payload?.choices)
     ? payload.choices.map((choice) => String(choice || "").trim())
     : [];
-  const correctAnswerIndex = Number(payload?.correctAnswerIndex);
+  const correctIndex = Number(
+    payload?.correctIndex ?? payload?.correctAnswerIndex
+  );
 
-  if (!questionText) {
-    return { error: "Question text is required." };
+  if (!question) {
+    return { error: "Question is required." };
   }
 
   if (choices.length !== 4 || choices.some((choice) => !choice)) {
     return { error: "Exactly 4 non-empty answer choices are required." };
   }
 
-  if (
-    !Number.isInteger(correctAnswerIndex) ||
-    correctAnswerIndex < 0 ||
-    correctAnswerIndex > 3
-  ) {
-    return { error: "Select one correct answer." };
+  if (!Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex > 3) {
+    return { error: "Exactly 1 correct answer must be selected." };
   }
 
   return {
     question: {
-      questionText,
+      question,
       choices,
-      correctAnswerIndex,
+      correctIndex,
     },
   };
 }
@@ -345,55 +346,30 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const roundStore = getRoundStore(room, room.setup.currentRound);
+    const roundNumber = Number(payload?.round) || room.setup.currentRound;
+    const roundStore = getRoundStore(room, roundNumber);
 
     if (!roundStore[socket.id]) {
       roundStore[socket.id] = [];
     }
 
-    if (roundStore[socket.id].length >= room.settings.questionsPerPlayerPerRound) {
-      socket.emit("gameError", "You already submitted all questions for this round.");
-      return;
-    }
-
     roundStore[socket.id].push({
+      gameId: room.gameId,
+      round: roundNumber,
       playerId: socket.id,
-      playerName: currentPlayer.name,
-      roundNumber: room.setup.currentRound,
       ...validation.question,
     });
 
-    const progress = getRoundProgress(room);
-    const everyoneFinished = progress.playerProgress.every(
-      (player) => player.submittedCount >= progress.questionsPerPlayerPerRound
-    );
-
-    emitRoundProgress(room);
-
-    if (!everyoneFinished) {
-      return;
-    }
-
-    io.to(room.gameId).emit("roundComplete", {
+    socket.emit("questionSaved", {
       gameId: room.gameId,
-      completedRound: room.setup.currentRound,
-      totalRounds: room.settings.rounds,
+      round: roundNumber,
+      playerId: socket.id,
+      question: validation.question.question,
+      choices: validation.question.choices,
+      correctIndex: validation.question.correctIndex,
     });
 
-    if (room.setup.currentRound >= room.settings.rounds) {
-      room.phase = "SETUP_COMPLETE";
-      io.to(room.gameId).emit("setupComplete", {
-        gameId: room.gameId,
-        totalRounds: room.settings.rounds,
-        questionsPerPlayerPerRound: room.settings.questionsPerPlayerPerRound,
-      });
-      broadcastLobby(room);
-      return;
-    }
-
-    room.setup.currentRound += 1;
     emitRoundProgress(room);
-    broadcastLobby(room);
   });
 
   socket.on("disconnect", () => {
